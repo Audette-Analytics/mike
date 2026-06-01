@@ -216,6 +216,30 @@ userRouter.patch("/profile", requireAuth, async (req, res) => {
   res.json({ ...data, apiKeyStatus });
 });
 
+// PUT /user/profile (alias for PATCH for compatibility)
+userRouter.put("/profile", requireAuth, async (req, res) => {
+  const userId = res.locals.userId as string;
+  const parsed = validateProfilePayload(req.body);
+  if (!parsed.ok) return void res.status(400).json({ detail: parsed.detail });
+
+  const db = createServerSupabase();
+  const ensureError = await ensureProfileRow(db, userId);
+  if (ensureError)
+    return void res.status(500).json({ detail: ensureError.message });
+
+  const { error: updateError } = await db
+    .from("user_profiles")
+    .update(parsed.update)
+    .eq("user_id", userId);
+  if (updateError)
+    return void res.status(500).json({ detail: updateError.message });
+
+  const { data, error } = await loadProfile(db, userId);
+  if (error) return void res.status(500).json({ detail: error.message });
+  const apiKeyStatus = await getUserApiKeyStatus(userId, db);
+  res.json({ ...data, apiKeyStatus });
+});
+
 // GET /user/api-keys
 userRouter.get("/api-keys", requireAuth, async (_req, res) => {
   const userId = res.locals.userId as string;
